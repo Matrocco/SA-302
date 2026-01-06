@@ -14,5 +14,5 @@ The application supports:
 
 1. **Clone the repository**:
    ```bash
-   git clone [https://gitlab.univ-artois.fr/your_username/SAE302_Project.git](https://gitlab.univ-artois.fr/your_username/SAE302_Project.git)
+   git clone [https://gitlab.univ-artois.fr/Matrocco/SAE302_Project.git](https://gitlab.univ-artois.fr/Matrocco/SAE302_Project.git)
    cd SAE302_Project
