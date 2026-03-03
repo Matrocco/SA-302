@@ -10,7 +10,7 @@ def search_in_txt_html(file_path, keyword, is_regex=False):
     """ Search for a keyword or regex in TXT or HTML files and return line numbers. """
     results = []
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             for line_num, line in enumerate(f, 1):
                 if is_regex:
                     if re.search(keyword, line):

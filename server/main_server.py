@@ -1,93 +1,85 @@
 import socket
-import threading
-import search_engine as se  # Import the search engine from Part 1
+import os
+from file_parser import search_in_pdf, search_in_excel # Importing our tools
 
-# Named constants as requested by the grading rubric 
+# --- CONSTANTS ---
 SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 52300
 BUFFER_SIZE = 1024
-ENDING_MSG = "q"
+FILES_DIRECTORY = "storage"
 
-def process_search(query_data):
+class SearchServer:
     """
-    Parse the client query and call the appropriate search functions.
-    Format expected: 'txt,pdf|apple|normal' or 'xlsx|^A.*|regex'
+    A robust server that disconnects only when the client closes the application.
     """
-    try:
-        categories_str, keyword, mode = query_data.split('|')
-        categories = categories_str.split(',')
-        is_regex = (mode.lower() == 'regex')
-        
-        final_results = []
-        
-        # Mapping categories to search functions
-        # This handles 'Choice of categories' requirement 
-        if 'txt' in categories or 'html' in categories:
-            # Search in data folder (relative path)
-            for file in os.listdir("data"):
-                if file.endswith(('.txt', '.html')):
-                    res = se.search_in_txt_html(f"data/{file}", keyword, is_regex)
-                    if res:
-                        final_results.append(f"{file}: {', '.join(res)}")
+    def __init__(self, host, port):
+        self.host = host
+        self.port = port
 
-        if 'pdf' in categories:
-            for file in os.listdir("data"):
-                if file.endswith('.pdf'):
-                    res = se.search_in_pdf(f"data/{file}", keyword, is_regex)
-                    if res:
-                        final_results.append(f"{file}: {', '.join(res)}")
+    def start(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((self.host, self.port))
+            s.listen(5)
+            print(f"[SERVER] Monitoring {FILES_DIRECTORY}. Waiting for connections...")
 
-        if 'xlsx' in categories:
-            for file in os.listdir("data"):
-                if file.endswith('.xlsx'):
-                    res = se.search_in_excel(f"data/{file}", keyword, is_regex)
-                    if res:
-                        final_results.append(f"{file}: {', '.join(res)}")
+            while True:
+                conn, addr = s.accept()
+                print(f"[SERVER] New connection: {addr}")
+                self.handle_client(conn)
 
-        return "\n".join(final_results) if final_results else "No matches found."
-    except Exception as e:
-        return f"Error processing request: {e}"
+    def handle_client(self, connection):
+        """
+        Handles data receipt until the socket is closed by the client.
+        """
+        with connection:
+            try:
+                while True:
+                    data = connection.recv(BUFFER_SIZE)
+                    if not data:
+                        # This happens when the client closes the window/app
+                        print("[SERVER] Client disconnected (Connection closed).")
+                        break
+                    
+                    keyword = data.decode("utf-8").strip()
+                    print(f"[QUERY] Searching for: '{keyword}'")
+                    
+                    results = self.scan_storage(keyword)
+                    connection.sendall(results.encode("utf-8"))
+            except ConnectionResetError:
+                print("[SERVER] Client forcibly closed the page.")
 
-def handle_client(connection, address):
-    """ Handle interaction with a specific client. """
-    print(f"[Server] Client {address} connected.")
-    
-    try:
-        while True:
-            # Receive data from client
-            data = connection.recv(BUFFER_SIZE).decode("utf8")
-            if not data or data == ENDING_MSG:
-                break
-                
-            print(f"[Client {address}] Search request: {data}")
+    def scan_storage(self, keyword):
+        """
+        Iterates through the storage folder and calls appropriate parsers.
+        """
+        output = []
+        if not os.path.exists(FILES_DIRECTORY):
+            return "Server storage folder missing."
+
+        for filename in os.listdir(FILES_DIRECTORY):
+            path = os.path.join(FILES_DIRECTORY, filename)
+            res = ""
             
-            # Execute search logic
-            search_response = process_search(data)
-            
-            # Send results back to client
-            connection.send(search_response.encode("utf8"))
-            
-    except ConnectionResetError:
-        print(f"[Server] Connection with {address} lost.")
-    finally:
-        connection.close()
-        print(f"[Server] Connection with {address} closed.")
+            if filename.endswith(".txt"):
+                res = self.parse_txt(path, keyword)
+            elif filename.endswith(".pdf"):
+                res = search_in_pdf(path, keyword)
+            elif filename.endswith(".xlsx"):
+                res = search_in_excel(path, keyword)
 
-def start_server():
-    """ Main loop to accept multiple clients. """
-    # Using 'with' automatically handles socket closing
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((SERVER_HOST, SERVER_PORT))
-        s.listen(5) # Allow a queue of clients
-        print(f"[Server] Server ready on {SERVER_HOST}:{SERVER_PORT}")
-        
-        while True:
-            # Accepting a new connection
-            conn, addr = s.accept()
-            # Launch a new thread for each client (Concurrent management) 
-            client_thread = threading.Thread(target=handle_client, args=(conn, addr))
-            client_thread.start()
+            if res:
+                output.append(f"[{filename}] Matches found at: {res}")
+
+        return "\n".join(output) if output else "No matches found."
+
+    def parse_txt(self, path, keyword):
+        """Simple text parser for .txt files."""
+        matches = []
+        with open(path, 'r', encoding='utf-8') as f:
+            for i, line in enumerate(f, 1):
+                if keyword.lower() in line.lower():
+                    matches.append(str(i))
+        return "Lines " + ", ".join(matches) if matches else ""
 
 if __name__ == "__main__":
-    import os # Needed for directory listing
-    start_server()
+    SearchServer(SERVER_HOST, SERVER_PORT).start()
