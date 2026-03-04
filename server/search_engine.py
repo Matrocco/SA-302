@@ -18,7 +18,7 @@ from bs4 import BeautifulSoup
 
 # --- Configuration ---
 # Default directory containing the documents to be indexed
-DOCUMENTS_DIR = "data"
+STORAGE_DIR = "storage"
 # Number of characters to display around the match for preview
 CONTEXT_LENGTH = 30 
 
@@ -124,7 +124,7 @@ def search_excel(filepath: str, pattern: str, is_regex: bool) -> List[dict[str, 
     """
     results: List[dict[str, Any]] = []
     try:
-        workbook = openpyxl.load_workbook(filepath, data_only=True)
+        workbook = openpyxl.load_workbook(filepath, storage_only=True)
         for sheet_name in workbook.sheetnames:
             sheet = workbook[sheet_name]
             for row in sheet.iter_rows():
@@ -183,12 +183,12 @@ def process_search(
             search_terms = [t.strip() for t in query.split(" OR ") if t.strip()]
             operator = "OR"
 
-    if not os.path.exists(DOCUMENTS_DIR):
-        print(f"[WARNING] Documents directory not found: {DOCUMENTS_DIR}")
+    if not os.path.exists(STORAGE_DIR):
+        print(f"[WARNING] Documents directory not found: {STORAGE_DIR}")
         return []
 
     # --- File Iteration & Matching ---
-    for filepath, ext in _iter_supported_files(DOCUMENTS_DIR):
+    for filepath, ext in _iter_supported_files(STORAGE_DIR):
         # Filter by user-selected extensions
         if allowed_extensions and ext not in allowed_extensions:
             continue
